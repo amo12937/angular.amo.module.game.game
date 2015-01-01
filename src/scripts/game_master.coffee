@@ -15,9 +15,15 @@ do (moduleName = "amo.module.game.game_master") ->
         resume: s.defaultAction
         finish: s.defaultAction
         stop: -> s STOPPED
+        isInit: -> false
+        isPlaying: -> false
+        isPausing: -> false
+        isDone: -> false
+        isStopped: -> false
 
       INIT = new class extends DefaultState
         start: -> s PLAYING
+        isInit: -> true
       PLAYING = do ->
         pausing = false
         return new class extends DefaultState
@@ -38,12 +44,16 @@ do (moduleName = "amo.module.game.game_master") ->
               s DONE
             else
               s PLAYING
+          isPlaying: -> true
+          isPausing: -> pausing
       DONE = new class extends DefaultState
         Entry: -> action.entryDone()
         stop: s.defaultAction
+        isDone: -> true
       STOPPED = new class extends DefaultState
         Entry: -> action.entryStopped()
         stop: s.defaultAction
+        isStopped: -> true
 
       return s.getFsm INIT
   ]
@@ -79,4 +89,5 @@ do (moduleName = "amo.module.game.game_master") ->
           pause: -> fsm().pause()
           resume: -> fsm().resume()
           stop: -> fsm().stop()
+  ]
 
