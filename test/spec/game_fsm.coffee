@@ -1,10 +1,10 @@
 "use strict"
 
-do (moduleName = "amo.module.game.game_master", smModuleName = "amo.module.state_machine") ->
+do (moduleName = "amo.module.game.game", smModuleName = "amo.module.state_machine") ->
   describe "#{moduleName} の仕様", ->
     beforeEach module moduleName
 
-    describe "#{moduleName}.GameMasterFsm の仕様", ->
+    describe "#{moduleName}.GameFsm の仕様", ->
       it "StateSetter を使用し、StateSetter().getFsm が返す値を返す", ->
         module ["$provide", ($provide) ->
           $provide.decorator "#{smModuleName}.StateSetter", ($delegate) ->
@@ -13,14 +13,14 @@ do (moduleName = "amo.module.game.game_master", smModuleName = "amo.module.state
             return holder.$delegate
         ]
 
-        inject ["#{smModuleName}.StateSetter", "#{moduleName}.GameMasterFsm", (StateSetter, GameMasterFsm) ->
+        inject ["#{smModuleName}.StateSetter", "#{moduleName}.GameFsm", (StateSetter, GameFsm) ->
           s = StateSetter()
           StateSetter.and.returnValue s
 
           expected = {}
           spyOn(s, "getFsm").and.returnValue expected
 
-          actual = GameMasterFsm {}
+          actual = GameFsm {}
           expect(actual).toBe expected
         ]
 
@@ -39,8 +39,8 @@ do (moduleName = "amo.module.game.game_master", smModuleName = "amo.module.state
             "entryStopped"
           ]
           action.canPause.and.returnValue true
-          inject ["#{moduleName}.GameMasterFsm", (GameMasterFsm) ->
-            fsm = GameMasterFsm action
+          inject ["#{moduleName}.GameFsm", (GameFsm) ->
+            fsm = GameFsm action
           ]
 
         describe "INIT 状態のとき", ->

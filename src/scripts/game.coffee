@@ -1,9 +1,9 @@
 "use strict"
 
-do (moduleName = "amo.module.game.game_master") ->
+do (moduleName = "amo.module.game.game") ->
   angular.module moduleName, ["ng", "amo.module.state_machine"]
 
-  .factory "#{moduleName}.GameMasterFsm", ["amo.module.state_machine.StateSetter", (StateSetter) ->
+  .factory "#{moduleName}.GameFsm", ["amo.module.state_machine.StateSetter", (StateSetter) ->
     (action) ->
       s = StateSetter()
 
@@ -58,9 +58,9 @@ do (moduleName = "amo.module.game.game_master") ->
       return s.getFsm INIT
   ]
 
-  .factory "#{moduleName}.GameMasterAction", [
+  .factory "#{moduleName}.Game", [
     "$timeout"
-    "#{moduleName}.GameMasterFsm"
+    "#{moduleName}.GameFsm"
     ($timeout, Fsm) ->
       (delegate) ->
         current = null
