@@ -5,47 +5,48 @@ do (amo = @[".amo"], moduleName = "amo.module.game.game") ->
     beforeEach module moduleName
 
     describe "#{moduleName}.Game の仕様", ->
+      $rootScope = null
       $timeout = null
       game = null
       delegate = null
       players = null
       beforeEach ->
-        delegate = jasmine.createSpyObj "delegate", [
-          "notifyStartingToPlay"
-          "getNextPlayer"
-          "notifyFinishedPlaying"
-          "notifyPausing"
-          "notifyResuming"
-          "end"
-          "stop"
-        ]
-        players = [0..2].map (n) ->
-          p = jasmine.createSpyObj "p[#{n}]", [
-            "play"
-            "canPause"
-            "pause"
-            "resume"
-          ]
-          _callback = null
-          p.play.and.callFake (callback) ->
-            _callback = callback
-          p.resolve = (result) ->
-            _callback? result
-          return p
-
-        delegate.getNextPlayer.and.callFake do (s = 0) -> ->
-          p = players[s]
-          s = (s + 1) % players.length
-          return p
-
         module ["$provide", ($provide) ->
           decorator = amo.test.helper.jasmine.spyOnDecorator spyOn
           $provide.decorator "$timeout", decorator
           return
         ]
 
-        inject ["$timeout", "#{moduleName}.Game", (_$timeout, Game) ->
+        inject ["$rootScope", "$timeout", "$q", "#{moduleName}.Game", (_$rootScope, _$timeout, $q, Game) ->
+          $rootScope = _$rootScope
           $timeout = _$timeout
+
+          delegate = jasmine.createSpyObj "delegate", [
+            "notifyStartingToPlay"
+            "getNextPlayer"
+            "notifyFinishedPlaying"
+            "notifyPausing"
+            "notifyResuming"
+            "end"
+            "stop"
+          ]
+
+          players = [0..2].map (n) ->
+            deferred = null
+            play: jasmine.createSpy("p[#{n}].play").and.callFake ->
+              deferred = $q.defer()
+              return deferred.promise
+            resolve: (result) ->
+              return unless deferred
+              deferred.resolve result
+              $rootScope.$digest()
+              deferred = null
+
+          delegate.getNextPlayer.and.callFake do (s = 0) -> ->
+            p = players[s]
+            s = (s + 1) % players.length
+            return p
+
           game = Game delegate
         ]
 
@@ -60,9 +61,9 @@ do (amo = @[".amo"], moduleName = "amo.module.game.game") ->
         expect($timeout).toHaveBeenCalledWith jasmine.any Function
         expect(players[0].play).not.toHaveBeenCalled()
         $timeout.flush()
-        expect(players[0].play).toHaveBeenCalledWith jasmine.any Function
+        expect(players[0].play).toHaveBeenCalled()
 
-      it "players[0].play が callback に true を渡すと、ゲームが終了する", ->
+      it "players[0].play() が返す promise に true が渡されると、ゲームが終了する", ->
         game.start()
         $timeout.flush()
         players[0].resolve true
@@ -72,7 +73,7 @@ do (amo = @[".amo"], moduleName = "amo.module.game.game") ->
       it "player.play が callback に false を渡すと、次のプレイヤーに対し play メッセージを送る関数が $timeout に登録される", ->
         expectPlaying = (n, b) ->
           if b
-            expect(players[n].play).toHaveBeenCalledWith jasmine.any Function
+            expect(players[n].play).toHaveBeenCalled()
           else
             expect(players[n].play).not.toHaveBeenCalled()
 
@@ -119,31 +120,37 @@ do (amo = @[".amo"], moduleName = "amo.module.game.game") ->
 
         expect(delegate.end).toHaveBeenCalled()
 
-      it "pause を呼ぶと、現在 play 中の player の canPause が呼ばれる", ->
+      it "pause が呼ばれると paused が true になる", ->
         game.start()
-        $timeout.flush()
-        expect(players[0].canPause).not.toHaveBeenCalled()
+        expect(game.paused()).toBe false
         game.pause()
-        expect(players[0].canPause).toHaveBeenCalled()
+        expect(game.paused()).toBe true
 
-      it "canPause が true を返すと player.pause が呼ばれ、delegate.notifyPausing が呼ばれる", ->
-        players[0].canPause.and.returnValue true
+      it "pause が呼ばれると delegate.notifyPausing が呼ばれる", ->
         game.start()
-        $timeout.flush()
+        expect(delegate.notifyPausing).not.toHaveBeenCalled()
         game.pause()
-        expect(players[0].pause).toHaveBeenCalled()
         expect(delegate.notifyPausing).toHaveBeenCalled()
 
-      it "canPause が false を返すと player.pause, delegate.notifyPausing は呼ばれない", ->
-        players[0].canPause.and.returnValue false
+      it "pause を2回連続で呼んでも、 delegate.notifyPausing は1度だけしか呼ばれない", ->
         game.start()
-        $timeout.flush()
         game.pause()
-        expect(players[0].pause).not.toHaveBeenCalled()
-        expect(delegate.notifyPausing).not.toHaveBeenCalled()
+        expect(delegate.notifyPausing.calls.count()).toBe 1
+        game.pause()
+        expect(delegate.notifyPausing.calls.count()).toBe 1
 
-      it "pause が呼ばれた後で player が play を終了しても、状態は遷移しない", ->
-        players[0].canPause.and.returnValue true
+      it "game が start する前は pause を呼んでも paused は true にならない", ->
+        game.pause()
+        expect(game.paused()).toBe false
+
+      it "pause を読んだあと resume を呼ぶと paused が解除される", ->
+        game.start()
+        game.pause()
+        expect(game.paused()).toBe true
+        game.resume()
+        expect(game.paused()).toBe false
+
+      it "paused の時に player が play を終了しても、状態は遷移しない", ->
         game.start()
         $timeout.flush()
         game.pause()
@@ -151,34 +158,36 @@ do (amo = @[".amo"], moduleName = "amo.module.game.game") ->
         expect(delegate.notifyFinishedPlaying).not.toHaveBeenCalled()
 
         game.resume()
-        players[0].resolve false
+        $rootScope.$digest()
         expect(delegate.notifyFinishedPlaying).toHaveBeenCalled()
+        expect(delegate.notifyStartingToPlay).toHaveBeenCalled()
 
-      it "pause が呼ばれた後で resume が呼ばれると player.resume, delegate.notifyResuming が呼ばれる", ->
-        players[0].canPause.and.returnValue true
+      it "pause が呼ばれた後で resume が呼ばれると delegate.notifyResuming が呼ばれる", ->
         game.start()
-        $timeout.flush()
         game.pause()
-        expect(players[0].resume).not.toHaveBeenCalled()
         expect(delegate.notifyResuming).not.toHaveBeenCalled()
         game.resume()
-        expect(players[0].resume).toHaveBeenCalled()
         expect(delegate.notifyResuming).toHaveBeenCalled()
 
-      it "pause が呼ばれる前に resume を呼んでも player.resume, delegate.notifyResuming は呼ばれない", ->
-        players[0].canPause.and.returnValue true
+      it "pause が呼ばれる前に resume を呼んでも delegate.notifyResuming は呼ばれない", ->
         game.start()
-        $timeout.flush()
         game.resume()
-        expect(players[0].resume).not.toHaveBeenCalled()
         expect(delegate.notifyResuming).not.toHaveBeenCalled()
+
+      it "resume を2回連続で呼んでも、delegate.notifyResuming は1度だけしか呼ばれない", ->
+        game.start()
+        game.pause()
+        game.resume()
+        expect(delegate.notifyResuming.calls.count()).toBe 1
+        game.resume()
+        expect(delegate.notifyResuming.calls.count()).toBe 1
 
       it "start 前に stop を呼ぶと game は始まらない", ->
         game.stop()
         expect(delegate.stop).toHaveBeenCalled()
 
         game.start()
-        expect(-> $timeout.verifyNoPendingTasks).not.toThrow()
+        expect(delegate.notifyStartingToPlay).not.toHaveBeenCalled()
 
       it "play 中に stop を呼ぶと play が強制終了される", ->
         game.start()
@@ -224,16 +233,12 @@ do (amo = @[".amo"], moduleName = "amo.module.game.game") ->
 
         it "notifyPausing は任意である", ->
           delete delegate.notifyPausing
-          players[0].canPause.and.returnValue true
           game.start()
-          $timeout.flush()
           expect(-> game.pause()).not.toThrow()
 
         it "notifyResuming は任意である", ->
           delete delegate.notifyResuming
-          players[0].canPause.and.returnValue true
           game.start()
-          $timeout.flush()
           game.pause()
           expect(-> game.resume()).not.toThrow()
 
@@ -252,55 +257,4 @@ do (amo = @[".amo"], moduleName = "amo.module.game.game") ->
           delete players[0].play
           game.start()
           expect(-> $timeout.flush()).toThrow()
-
-        it "canPause は任意である", ->
-          delete players[0].canPause
-          game.start()
-          $timeout.flush()
-          expect(-> game.pause()).not.toThrow()
-
-        it "canPause がない場合は pause は不要である", ->
-          delete players[0].canPause
-          delete players[0].pause
-          game.start()
-          $timeout.flush()
-          expect(-> game.pause()).not.toThrow()
-
-        it "canPause が true を返す場合は、pause は必須である", ->
-          delete players[0].pause
-          players[0].canPause.and.returnValue true
-          game.start()
-          $timeout.flush()
-          expect(-> game.pause()).toThrow()
-
-        it "canPause が必ず false を返す場合は、pause は必須である", ->
-          delete players[0].pause
-          players[0].canPause.and.returnValue false
-          game.start()
-          $timeout.flush()
-          expect(-> game.pause()).not.toThrow()
-
-        it "canPause がない場合は resume は不要である", ->
-          delete players[0].canPause
-          delete players[0].resume
-          game.start()
-          $timeout.flush()
-          game.pause()
-          expect(-> game.resume()).not.toThrow()
-
-        it "canPause が true を返す場合は、resume は必須である", ->
-          delete players[0].resume
-          players[0].canPause.and.returnValue true
-          game.start()
-          $timeout.flush()
-          game.pause()
-          expect(-> game.resume()).toThrow()
-
-        it "canPause が必ず false を返す場合は、resume は必須である", ->
-          delete players[0].resume
-          players[0].canPause.and.returnValue false
-          game.start()
-          $timeout.flush()
-          game.pause()
-          expect(-> game.resume()).not.toThrow()
 

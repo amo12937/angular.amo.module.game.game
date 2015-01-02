@@ -44,7 +44,6 @@ do (moduleName = "amo.module.game.game") ->
     "#{moduleName}.GameFsm"
     ($timeout, $q, Fsm) ->
       (delegate) ->
-        current = null
         stream = do ->
           deferred = $q.defer()
           promise = deferred.promise
@@ -61,20 +60,22 @@ do (moduleName = "amo.module.game.game") ->
             $timeout ->
               stream
               .add -> current.play()
-              .add (result) ->
+              .add (ended) ->
                 if paused
                   paused.promise.then -> fsm().finish ended
-                fsm().finish ended
+                else
+                  fsm().finish ended
+                return
           finishPlaying: ->
-            current = null
             delegate.notifyFinishedPlaying?()
           entryDone: -> delegate.end?()
           entryStopped: -> delegate.stop?()
 
         self =
-          start: -> fsm().start()
+          start: ->
+            fsm().start()
           pause: ->
-            return if paused
+            return if not fsm().isPlaying() or paused
             paused = $q.defer()
             delegate.notifyPausing?()
           resume: ->
@@ -82,6 +83,7 @@ do (moduleName = "amo.module.game.game") ->
             delegate.notifyResuming?()
             paused.resolve()
             paused = null
+          paused: -> !!paused
           stop: -> fsm().stop()
   ]
 
