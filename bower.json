@@ -1,6 +1,6 @@
 {
   "name": "angular.amo.module.game.game",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "authors": [
     "amo"
   ],
@@ -13,6 +13,7 @@
     "Gruntfile.coffee",
     "package.json",
     "karma.conf.coffee",
+    "doc",
     "src",
     "test"
   ],
