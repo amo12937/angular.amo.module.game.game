@@ -74,13 +74,13 @@ do (moduleName = "amo.module.game.game") ->
           finishPlaying: ->
             current = null
             delegate.notifyFinishedPlaying?()
-          canPause: -> current.canPause?()
+          canPause: -> current?.canPause?()
           pause: ->
-            current.pause?()
+            current?.pause?()
             delegate.notifyPausing?()
           resume: ->
             delegate.notifyResuming?()
-            current.resume?()
+            current?.resume?()
           entryDone: -> delegate.end?()
           entryStopped: -> delegate.stop?()
 
