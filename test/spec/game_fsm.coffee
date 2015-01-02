@@ -32,13 +32,9 @@ do (moduleName = "amo.module.game.game", smModuleName = "amo.module.state_machin
           action = jasmine.createSpyObj "action", [
             "startToPlay"
             "finishPlaying"
-            "canPause"
-            "pause"
-            "resume"
             "entryDone"
             "entryStopped"
           ]
-          action.canPause.and.returnValue true
           inject ["#{moduleName}.GameFsm", (GameFsm) ->
             fsm = GameFsm action
           ]
@@ -51,17 +47,9 @@ do (moduleName = "amo.module.game.game", smModuleName = "amo.module.state_machin
             fsm().start()
             expect(fsm().isPlaying()).toBe true
 
-          it "pause, resume, finish が呼ばれても状態は変化しない", ->
-            for func in ["pause", "resume", "finish"]
-              fsm()[func]()
-              expect(fsm().isInit()).toBe true
-
-          it "pause, resume が呼ばれても action の canPause, pause, resume は呼ばれない", ->
-            fsm().pause()
-            expect(action.canPause).not.toHaveBeenCalled()
-            expect(action.pause).not.toHaveBeenCalled()
-            fsm().resume()
-            expect(action.resume).not.toHaveBeenCalled()
+          it "finish が呼ばれても状態は変化しない", ->
+            fsm().finish()
+            expect(fsm().isInit()).toBe true
 
           it "stop が呼ばれると STOPPED 状態に遷移する", ->
             fsm().stop()
@@ -76,50 +64,6 @@ do (moduleName = "amo.module.game.game", smModuleName = "amo.module.state_machin
 
           it "start が呼ばれても状態は変化しない", ->
             fsm().start()
-            expect(fsm().isPlaying()).toBe true
-
-          it "pause が呼ばれると action.canPause が呼ばれる", ->
-            fsm().pause()
-            expect(action.canPause).toHaveBeenCalled()
-
-          it "action.canPause が false を返すと action.pause は呼ばれない", ->
-            action.canPause.and.returnValue false
-            fsm().pause()
-            expect(action.pause).not.toHaveBeenCalled()
-
-          it "action.canPause が true を返すと action.pause が呼ばれる", ->
-            fsm().pause()
-            expect(action.pause).toHaveBeenCalled()
-
-          it "pause に成功するとポーズ状態になる", ->
-            fsm().pause()
-            expect(fsm().isPlaying()).toBe true
-            expect(fsm().isPausing()).toBe true
-
-          describe "ポーズ状態のとき", ->
-            beforeEach ->
-              fsm().pause()
-
-            it "start, pause, finish が呼ばれても状態は変化しない", ->
-              for func in ["start", "pause", "finish"]
-                fsm()[func]()
-                expect(fsm().isPlaying()).toBe true
-                expect(fsm().isPausing()).toBe true
-
-            it "resume が呼ばれると action.resume が呼ばれ、ポーズ状態が解除される", ->
-              fsm().resume()
-              expect(action.resume).toHaveBeenCalled()
-              expect(fsm().isPlaying()).toBe true
-              expect(fsm().isPausing()).toBe false
-
-            it "stop が呼ばれると STOPPED 状態に遷移する", ->
-              fsm().stop()
-              expect(fsm().isStopped()).toBe true
-              expect(fsm().isPausing()).toBe false
-
-          it "ポーズ状態でないときに resume が呼ばれても、action.resume は呼ばれず、状態は変化しない", ->
-            fsm().resume()
-            expect(action.resume).not.toHaveBeenCalled()
             expect(fsm().isPlaying()).toBe true
 
           it "finish に true が渡されると DONE 状態に遷移する", ->
@@ -147,8 +91,8 @@ do (moduleName = "amo.module.game.game", smModuleName = "amo.module.state_machin
           it "Entry 時に action.entryDone が呼ばれる", ->
             expect(action.entryDone).toHaveBeenCalled()
 
-          it "start, pause, resume, finish, stop が呼ばれても状態は変化しない", ->
-            for func in ["start", "pause", "resume", "finish", "stop"]
+          it "start, finish, stop が呼ばれても状態は変化しない", ->
+            for func in ["start", "finish", "stop"]
               fsm()[func]()
               expect(fsm().isDone()).toBe true
 
@@ -160,8 +104,8 @@ do (moduleName = "amo.module.game.game", smModuleName = "amo.module.state_machin
           it "Entry 時に action.entryStopped が呼ばれる", ->
             expect(action.entryStopped).toHaveBeenCalled()
 
-          it "start, pause, resume, finish, stop が呼ばれても状態は変化しない", ->
-            for func in ["start", "pause", "resume", "finish", "stop"]
+          it "start, finish, stop が呼ばれても状態は変化しない", ->
+            for func in ["start", "finish", "stop"]
               fsm()[func]()
               expect(fsm().isStopped()).toBe true
 

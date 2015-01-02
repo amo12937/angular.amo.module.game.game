@@ -11,48 +11,28 @@ do (moduleName = "amo.module.game.game") ->
         Entry: s.defaultAction
         Exit: s.defaultAction
         start: s.defaultAction
-        pause: s.defaultAction
-        resume: s.defaultAction
         finish: s.defaultAction
-        stop: -> s STOPPED
+        stop: s.defaultAction
         isInit: -> false
         isPlaying: -> false
-        isPausing: -> false
         isDone: -> false
         isStopped: -> false
 
       INIT = new class extends DefaultState
         start: -> s PLAYING
+        stop: -> s STOPPED
         isInit: -> true
-      PLAYING = do ->
-        pausing = false
-        return new class extends DefaultState
-          Entry: -> action.startToPlay()
-          Exit: -> action.finishPlaying()
-          pause: ->
-            return if pausing
-            return unless action.canPause()
-            pausing = true
-            action.pause()
-          resume: ->
-            return unless pausing
-            action.resume()
-            pausing = false
-          finish: (ended) ->
-            return if pausing
-            if ended
-              s DONE
-            else
-              s PLAYING
-          isPlaying: -> true
-          isPausing: -> pausing
+      PLAYING = new class extends DefaultState
+        Entry: -> action.startToPlay()
+        Exit: -> action.finishPlaying()
+        finish: (ended) -> if ended then s DONE else s PLAYING
+        stop: -> s STOPPED
+        isPlaying: -> true
       DONE = new class extends DefaultState
         Entry: -> action.entryDone()
-        stop: s.defaultAction
         isDone: -> true
       STOPPED = new class extends DefaultState
         Entry: -> action.entryStopped()
-        stop: s.defaultAction
         isStopped: -> true
 
       return s.getFsm INIT
@@ -60,34 +40,48 @@ do (moduleName = "amo.module.game.game") ->
 
   .factory "#{moduleName}.Game", [
     "$timeout"
+    "$q"
     "#{moduleName}.GameFsm"
-    ($timeout, Fsm) ->
+    ($timeout, $q, Fsm) ->
       (delegate) ->
         current = null
+        stream = do ->
+          deferred = $q.defer()
+          promise = deferred.promise
+          deferred.resolve()
+          self =
+            add: (f) ->
+              promise = promise.then f
+              return self
+        paused = null
         fsm = Fsm
           startToPlay: ->
             delegate.notifyStartingToPlay?()
             current = delegate.getNextPlayer()
             $timeout ->
-              current.play (ended) ->
+              stream
+              .add -> current.play()
+              .add (result) ->
+                if paused
+                  paused.promise.then -> fsm().finish ended
                 fsm().finish ended
           finishPlaying: ->
             current = null
             delegate.notifyFinishedPlaying?()
-          canPause: -> current?.canPause?()
-          pause: ->
-            current.pause()
-            delegate.notifyPausing?()
-          resume: ->
-            delegate.notifyResuming?()
-            current.resume()
           entryDone: -> delegate.end?()
           entryStopped: -> delegate.stop?()
 
         self =
           start: -> fsm().start()
-          pause: -> fsm().pause()
-          resume: -> fsm().resume()
+          pause: ->
+            return if paused
+            paused = $q.defer()
+            delegate.notifyPausing?()
+          resume: ->
+            return unless paused
+            delegate.notifyResuming?()
+            paused.resolve()
+            paused = null
           stop: -> fsm().stop()
   ]
 
