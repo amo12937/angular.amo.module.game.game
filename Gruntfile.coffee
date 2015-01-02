@@ -27,8 +27,8 @@ module.exports = (grunt) ->
       options:
         banner: "/*! <%= pkg.name %> <%= pkg.version %> | Copyright (c) <%= grunt.template.today('yyyy') %> Author: <%= pkg.authors %> | License: <%= pkg.license %> */"
       build:
-        src: "<%= context.dir.dist %>/translator.js"
-        dest: "<%= context.dir.dist %>/translator.min.js"
+        src: "<%= context.dir.dist %>/game.js"
+        dest: "<%= context.dir.dist %>/game.min.js"
     karma:
       unit:
         configFile: "karma.conf.coffee"
