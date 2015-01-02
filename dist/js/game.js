@@ -18,25 +18,15 @@
 
             DefaultState.prototype.start = s.defaultAction;
 
-            DefaultState.prototype.pause = s.defaultAction;
-
-            DefaultState.prototype.resume = s.defaultAction;
-
             DefaultState.prototype.finish = s.defaultAction;
 
-            DefaultState.prototype.stop = function() {
-              return s(STOPPED);
-            };
+            DefaultState.prototype.stop = s.defaultAction;
 
             DefaultState.prototype.isInit = function() {
               return false;
             };
 
             DefaultState.prototype.isPlaying = function() {
-              return false;
-            };
-
-            DefaultState.prototype.isPausing = function() {
               return false;
             };
 
@@ -62,6 +52,10 @@
               return s(PLAYING);
             };
 
+            _Class.prototype.stop = function() {
+              return s(STOPPED);
+            };
+
             _Class.prototype.isInit = function() {
               return true;
             };
@@ -69,66 +63,40 @@
             return _Class;
 
           })(DefaultState));
-          PLAYING = (function() {
-            var pausing;
-            pausing = false;
-            return new ((function(_super) {
-              __extends(_Class, _super);
+          PLAYING = new ((function(_super) {
+            __extends(_Class, _super);
 
-              function _Class() {
-                return _Class.__super__.constructor.apply(this, arguments);
+            function _Class() {
+              return _Class.__super__.constructor.apply(this, arguments);
+            }
+
+            _Class.prototype.Entry = function() {
+              return action.startToPlay();
+            };
+
+            _Class.prototype.Exit = function() {
+              return action.finishPlaying();
+            };
+
+            _Class.prototype.finish = function(ended) {
+              if (ended) {
+                return s(DONE);
+              } else {
+                return s(PLAYING);
               }
+            };
 
-              _Class.prototype.Entry = function() {
-                return action.startToPlay();
-              };
+            _Class.prototype.stop = function() {
+              return s(STOPPED);
+            };
 
-              _Class.prototype.Exit = function() {
-                return action.finishPlaying();
-              };
+            _Class.prototype.isPlaying = function() {
+              return true;
+            };
 
-              _Class.prototype.pause = function() {
-                if (pausing) {
-                  return;
-                }
-                if (!action.canPause()) {
-                  return;
-                }
-                pausing = true;
-                return action.pause();
-              };
+            return _Class;
 
-              _Class.prototype.resume = function() {
-                if (!pausing) {
-                  return;
-                }
-                action.resume();
-                return pausing = false;
-              };
-
-              _Class.prototype.finish = function(ended) {
-                if (pausing) {
-                  return;
-                }
-                if (ended) {
-                  return s(DONE);
-                } else {
-                  return s(PLAYING);
-                }
-              };
-
-              _Class.prototype.isPlaying = function() {
-                return true;
-              };
-
-              _Class.prototype.isPausing = function() {
-                return pausing;
-              };
-
-              return _Class;
-
-            })(DefaultState));
-          })();
+          })(DefaultState));
           DONE = new ((function(_super) {
             __extends(_Class, _super);
 
@@ -139,8 +107,6 @@
             _Class.prototype.Entry = function() {
               return action.entryDone();
             };
-
-            _Class.prototype.stop = s.defaultAction;
 
             _Class.prototype.isDone = function() {
               return true;
@@ -160,8 +126,6 @@
               return action.entryStopped();
             };
 
-            _Class.prototype.stop = s.defaultAction;
-
             _Class.prototype.isStopped = function() {
               return true;
             };
@@ -173,38 +137,45 @@
         };
       }
     ]).factory("" + moduleName + ".Game", [
-      "$timeout", "" + moduleName + ".GameFsm", function($timeout, Fsm) {
+      "$timeout", "$q", "" + moduleName + ".GameFsm", function($timeout, $q, Fsm) {
         return function(delegate) {
-          var current, fsm, self;
-          current = null;
+          var fsm, paused, self, stream;
+          stream = (function() {
+            var deferred, promise, self;
+            deferred = $q.defer();
+            promise = deferred.promise;
+            deferred.resolve();
+            return self = {
+              add: function(f) {
+                promise = promise.then(f);
+                return self;
+              }
+            };
+          })();
+          paused = null;
           fsm = Fsm({
             startToPlay: function() {
+              var current;
               if (typeof delegate.notifyStartingToPlay === "function") {
                 delegate.notifyStartingToPlay();
               }
               current = delegate.getNextPlayer();
               return $timeout(function() {
-                return current.play(function(ended) {
-                  return fsm().finish(ended);
+                return stream.add(function() {
+                  return current.play();
+                }).add(function(ended) {
+                  if (paused) {
+                    paused.promise.then(function() {
+                      return fsm().finish(ended);
+                    });
+                  } else {
+                    fsm().finish(ended);
+                  }
                 });
               });
             },
             finishPlaying: function() {
-              current = null;
               return typeof delegate.notifyFinishedPlaying === "function" ? delegate.notifyFinishedPlaying() : void 0;
-            },
-            canPause: function() {
-              return current != null ? typeof current.canPause === "function" ? current.canPause() : void 0 : void 0;
-            },
-            pause: function() {
-              current.pause();
-              return typeof delegate.notifyPausing === "function" ? delegate.notifyPausing() : void 0;
-            },
-            resume: function() {
-              if (typeof delegate.notifyResuming === "function") {
-                delegate.notifyResuming();
-              }
-              return current.resume();
             },
             entryDone: function() {
               return typeof delegate.end === "function" ? delegate.end() : void 0;
@@ -218,10 +189,24 @@
               return fsm().start();
             },
             pause: function() {
-              return fsm().pause();
+              if (!fsm().isPlaying() || paused) {
+                return;
+              }
+              paused = $q.defer();
+              return typeof delegate.notifyPausing === "function" ? delegate.notifyPausing() : void 0;
             },
             resume: function() {
-              return fsm().resume();
+              if (!paused) {
+                return;
+              }
+              if (typeof delegate.notifyResuming === "function") {
+                delegate.notifyResuming();
+              }
+              paused.resolve();
+              return paused = null;
+            },
+            paused: function() {
+              return !!paused;
             },
             stop: function() {
               return fsm().stop();
