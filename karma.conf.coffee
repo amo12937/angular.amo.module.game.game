@@ -7,6 +7,7 @@ module.exports = (config) ->
       "bower_components/angular/angular.js"
       "bower_components/angular-mocks/angular-mocks.js"
       "bower_components/angular.amo.module.state_machine/dist/js/state_machine.js"
+      "bower_components/amo.test.helper/dist/js/helper.js"
       "src/**/*.coffee"
       "test/**/*.coffee"
     ]
